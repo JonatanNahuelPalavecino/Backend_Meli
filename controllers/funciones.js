@@ -18,10 +18,10 @@ const generadorIdNuevo = async () => {
     try {
         const snapshot = await getDocs(ordenesDeCompraRef);
         const ids = snapshot.docs.map((doc) => doc.id);
-        newId = nuevoId()
+        let newId = nuevoId()
         const isTrue = ids.includes(newId)
         while (isTrue) {
-            newId = nuevoId()
+            let newId = nuevoId()
             const isTrue = ids.includes(newId)
             if (!isTrue) {
                 return newId
