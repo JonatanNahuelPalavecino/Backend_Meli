@@ -1,5 +1,5 @@
 const express = require('express');
-const { createOrder, receiveWebHook, buscarPago } = require('../controllers/payment.controller.js')
+const { createOrder, receiveWebHook } = require('../controllers/payment.controller.js')
 const router = express()
 
 router.post("/crear-orden", createOrder)

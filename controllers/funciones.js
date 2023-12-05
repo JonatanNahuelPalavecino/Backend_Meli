@@ -1,6 +1,7 @@
 const { collection, getDocs, writeBatch, query, where, documentId, setDoc, doc } = require("@firebase/firestore");
 const db = require("../config/database.config.js");
 
+
 const nuevoId = () => {
     const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let nuevoId = ''
@@ -81,6 +82,5 @@ const  cargarOrdenEnDataBase = async (orden) => {
 
 module.exports = {
     generadorIdNuevo,
-    db,
-    cargarOrdenEnDataBase,
+    cargarOrdenEnDataBase
 }

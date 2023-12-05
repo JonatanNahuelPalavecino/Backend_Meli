@@ -1,5 +1,6 @@
 const mercadopago = require('mercadopago');
-const { generadorIdNuevo, db, cargarOrdenEnDataBase} = require('./funciones.js');
+const { generadorIdNuevo, cargarOrdenEnDataBase} = require('./funciones.js');
+const {enviarEmailCliente, enviarEmailUsuario} = require('./enviarMails.js')
 require('dotenv').config();
 
 const sharedData = {
@@ -26,12 +27,12 @@ const createOrder = async (req, res) => {
             }
         ],
         back_urls: {
-            success: "http://localhost:3000/redireccionando",
-            failure: "http://localhost:3000/redireccionando",
-            pending: "http://localhost:3000/redireccionando",
+            success: "http://localhost:3000/pago-realizado",
+            failure: "http://localhost:3000/pago-rechazado",
+            pending: "http://localhost:3000/pago-pendiente",
         },
-        notification_url: 'https://1779-2800-810-450-c26-e4b4-36a5-cf7c-9029.ngrok.io/webhook',
-        //auto_return: 'approved'
+        notification_url: 'https://e346-2800-810-450-c26-8807-106-f3d8-8bb2.ngrok.io/webhook',
+        //auto_return: 'all'
     };
 
     try {
@@ -77,8 +78,9 @@ const receiveWebHook = async (req, res) => {
             //EL SIGUIENTE IF MUESTRA SI EN DATA ESTA LA CONFIRMACION DEL PAGO, SI ES APROBADO DEBEMOS DE ENVIAR EL MAIL Y ACTUALIZAR LA BASE DE DATOS DE PRODUCTOS Y ORDEN DE COMPRA
             if (data.body.status === "approved") {
 
-                //cargarOrdenEnDataBase(sharedData.orderData)
-                console.log(sharedData.orderData)
+                cargarOrdenEnDataBase(sharedData.orderData)
+                enviarEmailCliente(sharedData.orderData)
+                enviarEmailUsuario(sharedData.orderData)
                 console.log("Pago aprobado");
             }  else if (data.body.status === "rejected") {
 
@@ -103,5 +105,5 @@ const receiveWebHook = async (req, res) => {
 
 module.exports = {
     createOrder, 
-    receiveWebHook
+    receiveWebHook,
 };
