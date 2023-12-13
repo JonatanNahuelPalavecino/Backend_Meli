@@ -11,16 +11,16 @@ const createOrder = async (req, res) => {
 
     const dato = JSON.parse(req.body.oc)
 
-    mercadopago.configure({
-        access_token: process.env.MERCADOPAGO_TOKEN,
-    });
+    const client = new mercadopago.MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_TOKEN, options: { timeout: 5000, idempotencyKey: process.env.IDEMPOTENCY } });
 
-    const preference = {
+    const preference = new mercadopago.Preference(client);
+
+    const body = {
         items: [
             {
                 title: 'JB Premium',
                 description: 'Vinos Españoles',
-                picture_url: 'https://jbpremium.com.ar/img/logo.png',
+                picture_url: 'https://firebasestorage.googleapis.com/v0/b/jb-premium.appspot.com/o/logo.png?alt=media&token=d7b19b53-95e5-42e0-b371-d9628ae1c6fc',
                 quantity: 1,
                 currency_id: 'ARS',
                 unit_price: parseFloat(dato.total)
@@ -31,12 +31,21 @@ const createOrder = async (req, res) => {
             failure: "http://localhost:3000/pago-rechazado",
             pending: "http://localhost:3000/pago-pendiente",
         },
-        notification_url: 'https://e346-2800-810-450-c26-8807-106-f3d8-8bb2.ngrok.io/webhook',
-        //auto_return: 'all'
-    };
+        //auto_return: 'all',
+        notification_url: 'https://19f4-2800-810-450-c26-993c-653e-37e3-a97.ngrok-free.app/webhook',
+        payment_methods: {
+            excluded_payment_methods: [],
+            excluded_payment_types: [
+                {
+                id: "ticket"
+                }
+            ],
+            installments: 12
+        },
+    }
 
     try {
-        const result = await mercadopago.preferences.create(preference);
+        const result = await preference.create( {body} );
         const id = await generadorIdNuevo()
         sharedData.orderData = {
             id: id,
@@ -44,10 +53,9 @@ const createOrder = async (req, res) => {
             carrito: dato.carrito,
             total: dato.total,
             fecha: dato.fecha,
-            transaccion: null,
         }
         res.send({
-            mp: result.body,
+            mp: result,
             compraId : id
         });
     } catch (error) {
@@ -57,50 +65,53 @@ const createOrder = async (req, res) => {
 }
 
 const receiveWebHook = async (req, res) => {
-    
-    const payment = req.query
+    const payment = req.query;
 
     try {
-
         if (payment.type === "payment") {
-            const data = await mercadopago.payment.findById(payment['data.id'])
+            const response = await fetch(`https://api.mercadopago.com/v1/payments/${payment['data.id']}`, {
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${process.env.MERCADOPAGO_TOKEN}`,
+                }
+            });
 
-            sharedData.orderData.transaccion = {
-                transaccion_id: data.body.id,
-                tarjeta: data.body.payment_method_id,
-                tipoDeTarjeta: data.body.payment_type_id,
-                estado: data.body.status,
-                detalleDelPago: data.body.status_detail,
-                pagoRecibido: data.body.transaction_details.net_received_amount,
-                pagoBruto: data.body.transaction_details.total_paid_amount,
-            }
- 
-            //EL SIGUIENTE IF MUESTRA SI EN DATA ESTA LA CONFIRMACION DEL PAGO, SI ES APROBADO DEBEMOS DE ENVIAR EL MAIL Y ACTUALIZAR LA BASE DE DATOS DE PRODUCTOS Y ORDEN DE COMPRA
-            if (data.body.status === "approved") {
+            if (response.ok) {
+                const data = await response.json();
 
-                cargarOrdenEnDataBase(sharedData.orderData)
-                enviarEmailCliente(sharedData.orderData)
-                enviarEmailUsuario(sharedData.orderData)
-                console.log("Pago aprobado");
-            }  else if (data.body.status === "rejected") {
-
-                console.log("Pago rechazado");
-
+                sharedData.orderData.transaccion = {
+                    transaccion_id: data.id,
+                    tarjeta: data.payment_method_id,
+                    tipoDeTarjeta: data.payment_type_id,
+                    estado: data.status,
+                    detalleDelPago: data.status_detail,
+                    pagoRecibido: data.transaction_details.net_received_amount,
+                    pagoBruto: data.transaction_details.total_paid_amount,
+                }
+                
+                if (data.status === "approved") {
+                    cargarOrdenEnDataBase(sharedData.orderData)
+                    enviarEmailCliente(sharedData.orderData)
+                    enviarEmailUsuario(sharedData.orderData)
+                    console.log("Pago aprobado");
+                }  else if (data.status === "rejected") {
+                    enviarEmailUsuario(sharedData.orderData)
+                    console.log("Pago rechazado");
+                } else {
+                    enviarEmailCliente(sharedData.orderData)
+                    enviarEmailUsuario(sharedData.orderData)
+                    console.log("Pago pendiente");
+                }
             } else {
-
-                console.log("Pago pendiente");
-
+                console.error(`Error al obtener la compra: ${response.status} - ${response.statusText}`);
             }
-
         } else {
             console.log("No es un Hook de tipo payment");
         }
-        return res.status(200).send('OK');
-
     } catch (error) {
-        console.log(error);
-        return res.sendStatus(500).json({ error: error.message })
+        console.error("Error en la solicitud:", error);
     }
+    return res.status(200).send('OK');
 }
 
 module.exports = {
